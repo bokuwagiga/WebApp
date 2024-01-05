@@ -176,6 +176,14 @@
     margin-bottom: 10px;
 }
 
+.header-text {
+    display: flex;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #4F4846;
+    margin-bottom: 8px;
+}
+
 .post-header {
     display: flex;
     align-items: center;
@@ -315,7 +323,6 @@
 .user-profile {
     display: flex;
     flex-direction: column;
-    align-items: center;
     padding: 20px;
 }
 

@@ -65,9 +65,7 @@ const CommentPage = ({ token }) => {
       });
 
       if (response.ok) {
-        // Reset isEditing state after saving the edit
         setEditing(false);
-        // Reload the page to reflect the changes
         window.location.reload();
       } else {
         console.error('Error updating comment:', response.statusText);

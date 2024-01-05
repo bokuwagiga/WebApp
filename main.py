@@ -27,8 +27,8 @@ class User(Base, db.Model):
     password = db.Column(db.String(60), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
 
-    posts = db.relationship('Post', backref='user', lazy=True)
-    comments = db.relationship('Comment', backref='user', lazy=True)
+    posts = db.relationship('Post', backref='user', lazy=True, cascade='all, delete-orphan')
+    comments = db.relationship('Comment', backref='user', lazy=True, cascade='all, delete-orphan',)
 
     def json(self, exclude_keys=None):
         if exclude_keys is None:
@@ -90,7 +90,7 @@ class Post(Base, db.Model):
 
         return post_json
 
-    comments = db.relationship('Comment', backref='post', lazy=True)
+    comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan',)
 
 
 class Comment(Base, db.Model):
@@ -172,7 +172,7 @@ def before_request():
     return check_token()
 
 
-# CRUD methods for Users
+# API methods for authentication and authorization
 @app.route('/register', methods=['POST'])
 def register():
     try:
@@ -236,6 +236,7 @@ def login():
         return jsonify({"error": "Bad Request", "message": f"Missing required field: {e.args[0]}"}), 400
 
 
+# CRUD methods for users
 @app.route('/users', methods=['GET'])
 def get_users():
     users = User.query.all()
@@ -293,9 +294,24 @@ def update_user(user_id):
 
         data = request.get_json()
         validate_json(['username', 'password'], data)
+        password = user.password
+
+        if data['new_password'] and data['repeat_new_password'] and data['new_password'] != '' \
+                and data['repeat_new_password'] != '':
+            if data['new_password'] != data['repeat_new_password']:
+                return jsonify({'message': "New passwords don't match"}), 400
+            else:
+                password = bcrypt.generate_password_hash(data['new_password']).decode('utf-8')
+
+        existing_user = User.query.filter_by(username=data['username']).first()
+        if existing_user:
+            if existing_user.user_id != user.user_id:
+                return jsonify({'message': 'Username already exists'}), 400
+        if not bcrypt.check_password_hash(user.password, data['password']) and not g.user.is_admin:
+            return jsonify({'message': 'Current password is incorrect'}), 401
 
         user.username = data['username']
-        user.password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+        user.password = password
 
         db.session.commit()
         return jsonify({'message': 'User updated successfully'}), 201

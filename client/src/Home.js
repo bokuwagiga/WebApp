@@ -27,13 +27,13 @@ const Home = () => {
     return (
         <div className="container">
             <header className="header">
-                <h1>Home</h1>
+                <h1 className="header-text">Home</h1>
                 <Link to="/login" className="button">
                     <button>Login</button>
                 </Link>
             </header>
             <div className="page-content">
-                <div className="post-container">
+                <div className="posts-container">
                     {posts.length === 0 ? (
                         <p className="loading-posts">Loading posts...</p>
                     ) : (
@@ -52,10 +52,8 @@ const Home = () => {
                                         {post.comments.map((comment) => (
                                             <li key={comment.comment_id}
                                                 className="comment-item">
-                                                <Link
-                                                    to={`/users/${comment.user_id}`}
-                                                    className="user-link">
-                                                    {comment.user}:
+                                                <Link to={`/login`} className="user-link">
+                                                    {comment.user}
                                                 </Link>{comment.comment_content}
                                             </li>
                                         ))}
