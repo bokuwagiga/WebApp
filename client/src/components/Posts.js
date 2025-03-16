@@ -5,45 +5,53 @@ import Button from "../components/Button";
 
 const Posts = ({posts, pagination, onPageChange}) => {
     console.log("Posts data:", posts);
+    console.log("Pagination data:", pagination);
 
     return (
-        <div>
+        <>
             {!posts || posts.length === 0 ? (
                 <p>Loading posts...</p>
             ) : (
                 <>
-                    <div className="posts-list">
-                        {posts.map((post) => (
-                            <Post key={post.post_id} post={post}/>
-                        ))}
-                    </div>
+                    {posts.map((post) => (
+                        <Post key={post.id} post={post}/>
+                    ))}
 
                     {pagination && (
-                        <div className="pagination-controls">
+                        <div className="pagination">
                             <Button
-                                onClick={() => onPageChange(pagination.page - 1)}
-                                disabled={!pagination.has_prev}
-                                className="post-button"
-                            >
+                                onClick={() => {
+                                    if (pagination.page > 1) {
+                                        onPageChange(pagination.page - 1);
+                                        window.scrollTo({top: 0, behavior: 'smooth'});
+                                    }
+                                }}
+                                disabled={pagination.page === 1 || !pagination.has_prev}
+                                className={`post-button ${pagination.page === 1 || !pagination.has_prev ? 'disabled' : ''}`}>
                                 Previous
                             </Button>
 
-                            <span className="pagination-info">
+                            <span>
                                 Page {pagination.page} of {pagination.pages || 1}
                             </span>
 
                             <Button
-                                onClick={() => onPageChange(pagination.page + 1)}
-                                disabled={!pagination.has_next}
-                                className="post-button"
-                            >
+                                onClick={() => {
+                                    if (pagination.page < pagination.pages) {
+                                        onPageChange(pagination.page + 1);
+                                        window.scrollTo({top: 0, behavior: 'smooth'});
+                                    }
+                                }}
+                                disabled={pagination.page === pagination.pages || !pagination.has_next}
+                                className={`post-button ${pagination.page === pagination.pages || !pagination.has_next ? 'disabled' : ''}`}>
+
                                 Next
                             </Button>
                         </div>
                     )}
                 </>
             )}
-        </div>
+        </>
     );
 };
 

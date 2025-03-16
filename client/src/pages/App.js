@@ -51,19 +51,19 @@ const App = () => {
         }
     }, [token]);
 
-const fetchPostsPublic = useCallback(async (page, perPage) => {
-    try {
-        const response = await fetch(`http://localhost:5000/posts?page=${page}&per_page=${perPage}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch posts');
+    const fetchPostsPublic = useCallback(async (page, perPage) => {
+        try {
+            const response = await fetch(`http://localhost:5000/posts?page=${page}&per_page=${perPage}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch posts');
+            }
+            const data = await response.json();
+            return {posts: data.posts, pagination: data.pagination};
+        } catch (error) {
+            console.error('Error fetching public posts:', error);
+            throw error;
         }
-        const data = await response.json();
-        return { posts: data.posts, pagination: data.pagination };
-    } catch (error) {
-        console.error('Error fetching public posts:', error);
-        throw error;
-    }
-}, []);
+    }, []);
 
     const {
         data: posts,
@@ -73,31 +73,30 @@ const fetchPostsPublic = useCallback(async (page, perPage) => {
         handlePageChange
     } = usePagination(token ? fetchPostsAuth : fetchPostsPublic);
 
-    const fetchData = useCallback(async (enteredToken) => {
-        try {
-            await loadPosts(1);
-            if (enteredToken) {
-                const usersResponse = await fetch('/users', {
-                    headers: {
-                        Authorization: `Bearer ${enteredToken}`,
-                    },
-                });
-                if (usersResponse.ok) {
-                    const usersData = await usersResponse.json();
-                    setUsers(usersData);
-                } else {
-                    if (usersResponse.status === 401) {
-                        sessionStorage.removeItem('token');
-                        navigate('/login');
-                    }
+const fetchData = useCallback(async (enteredToken) => {
+    if (enteredToken === token) return;
+    try {
+        await loadPosts(1);
+        if (enteredToken) {
+            const usersResponse = await fetch('/users', {
+                headers: {
+                    Authorization: `Bearer ${enteredToken}`,
+                },
+            });
+            if (usersResponse.ok) {
+                const usersData = await usersResponse.json();
+                setUsers(usersData);
+            } else {
+                if (usersResponse.status === 401) {
+                    sessionStorage.removeItem('token');
+                    navigate('/login');
                 }
             }
-        } catch (error) {
-            console.error('Error fetching data:', error);
         }
-    }, [loadPosts, navigate]);
-
-
+    } catch (error) {
+        console.error('Error fetching data:', error);
+    }
+}, [loadPosts, navigate, token]);
     const handleLogout = () => {
         sessionStorage.removeItem('token');
         setToken('');
@@ -147,7 +146,7 @@ const fetchPostsPublic = useCallback(async (page, perPage) => {
 
     return (
         <div className="container">
-          {token && <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>}
+            {token && <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>}
             <div className="page-content">
                 {token && (
                     <div className="users-container">
@@ -170,15 +169,24 @@ const fetchPostsPublic = useCallback(async (page, perPage) => {
                 <div className="posts-container" style={{width: "100%"}}>
                     <div className="posts-header">
                         <h1>Posts</h1>
-                        <Button
-                            onClick={() => {
-                                setShowCreatePostForm(true);
-                                setCreatePostButtonVisibility(false);
-                            }}
-                            className={`post-button ${isCreatePostButtonVisible ? '' : 'hidden'}`}
-                        >
-                            Create A New Post
-                        </Button>
+                        {token ? (
+                            <Button
+                                onClick={() => {
+                                    setShowCreatePostForm(true);
+                                    setCreatePostButtonVisibility(false);
+                                }}
+                                className={`post-button ${isCreatePostButtonVisible ? '' : 'hidden'}`}
+                            >
+                                Create A New Post
+                            </Button>
+                        ) : (
+                            <Button
+                                onClick={() => navigate('/login')}
+                                className="post-button"
+                            >
+                                Login
+                            </Button>
+                        )}
                     </div>
                     {showCreatePostForm && (
                         <div className="create-post-form">

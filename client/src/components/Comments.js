@@ -6,7 +6,7 @@ const Comments = ({ comments }) => {
     console.log("Comments data:", comments);
 
     if (!comments || !Array.isArray(comments) || comments.length === 0) {
-        return <p>No comments yet.</p>;
+        return <p className="info-text">No comments yet.</p>;
     }
 
     return (

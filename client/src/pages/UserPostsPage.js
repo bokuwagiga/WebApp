@@ -10,6 +10,7 @@ const UserPostsPage = ({ token }) => {
   const [decodedToken, setDecodedToken] = useState({});
   const { userId } = useParams();
   const navigate = useNavigate();
+  const [hasFetched, setHasFetched] = useState(false);
 
   const fetchUserPosts = async (page, perPage) => {
     if (!userId || !token) return null;
@@ -40,10 +41,11 @@ const UserPostsPage = ({ token }) => {
   } = usePagination(fetchUserPosts);
 
   useEffect(() => {
-    if (userId && token) {
+    if (userId && token && !hasFetched) {
       loadPosts(1);
+      setHasFetched(true);
     }
-  }, [userId, token, loadPosts]);
+  }, [userId, token, loadPosts, hasFetched]);
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem('token');

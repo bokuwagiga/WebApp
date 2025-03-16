@@ -13,11 +13,11 @@ const usePagination = (fetchFunction, initialPage = 1, perPage = 10) => {
     });
     const [error, setError] = useState(null);
 
-    const fetchData = useCallback(async (page = initialPage) => {
+    const fetchData = useCallback(async (page = pagination.page) => {
         setError(null);
 
         try {
-            const result = await fetchFunction(page, perPage);
+            const result = await fetchFunction(page, pagination.per_page);
 
             if (result && result.posts) {
                 setData(result.posts);
@@ -29,7 +29,7 @@ const usePagination = (fetchFunction, initialPage = 1, perPage = 10) => {
             console.error('Error fetching paginated data:', err);
             setError(err.message || 'Failed to load data');
         }
-    }, [fetchFunction, perPage, initialPage]);
+    }, [fetchFunction, pagination.page, pagination.per_page]);
 
     const handlePageChange = (newPage) => {
         fetchData(newPage);
