@@ -26,7 +26,6 @@ const PostPage = ({token}) => {
                     const postData = await postResponse.json();
                     const commentsData = await commentsResponse.json();
 
-                    // Merge comments into the post data
                     const postWithComments = {...postData, comments: commentsData.comments};
 
                     setPost(postWithComments);
@@ -97,9 +96,7 @@ const PostPage = ({token}) => {
             });
 
             if (response.ok) {
-                // Reset isEditing state after saving the update
                 setEditing(false);
-                // Reload the page to reflect the changes
                 window.location.reload();
             } else {
                 console.error('Error updating post:', response.statusText);
@@ -110,7 +107,6 @@ const PostPage = ({token}) => {
     };
 
     const handleCancelUpdate = () => {
-        // Reset isEditing state without saving the update
         setEditing(false);
         setUpdatedContent('');
     };

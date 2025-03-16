@@ -1,67 +1,79 @@
-import React, {useEffect, useState} from 'react';
-import {useParams, useNavigate} from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import '../styles/App.css';
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import Posts from "../components/Posts";
+import usePagination from '../hooks/usePagination';
 
-const UserPostsPage = ({token}) => {
-        const [decodedToken, setDecodedToken] = useState({});
-        const {userId} = useParams();
-        const [posts, setPosts] = useState([]);
-        const navigate = useNavigate();
+const UserPostsPage = ({ token }) => {
+  const [decodedToken, setDecodedToken] = useState({});
+  const { userId } = useParams();
+  const navigate = useNavigate();
 
-        useEffect(() => {
-            const fetchUserPosts = async () => {
-                try {
-                    const response = await fetch(`http://127.0.0.1:5000/users/${userId}/posts`, {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    });
+  const fetchUserPosts = async (page, perPage) => {
+    if (!userId || !token) return null;
 
-                    if (response.ok) {
-                        const postsData = await response.json();
-                        console.log('Fetched posts:', postsData); // Debugging output
-                        setPosts(postsData);
-                    } else {
-                        console.error('Failed to fetch posts:', response.statusText);
-                    }
-                } catch (error) {
-                    console.error('Error fetching posts:', error);
-                }
-            };
+    const response = await fetch(
+      `http://127.0.0.1:5000/users/${userId}/posts?page=${page}&per_page=${perPage}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-            if (userId && token) {
-                fetchUserPosts();
-            }
-        }, [userId, token]);
-
-
-        useEffect(() => {
-            const storedToken = sessionStorage.getItem('token');
-            if (storedToken) {
-                const decoded = jwtDecode(storedToken);
-                setDecodedToken(decoded);
-            }
-        }, []);
-
-
-        const handleLogout = () => {
-            sessionStorage.removeItem('token');
-            navigate('/login');
-        };
-
-        return (
-            <div className="container">
-                <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>
-                <div className="posts-container">
-                    <h1>Posts</h1>
-                    <Posts posts={posts}></Posts>
-                </div>
-            </div>
-        );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch user posts');
     }
-;
+
+    return await response.json();
+  };
+
+  const {
+    data: posts,
+    pagination,
+    error,
+    fetchData: loadPosts,
+    handlePageChange
+  } = usePagination(fetchUserPosts);
+
+  useEffect(() => {
+    if (userId && token) {
+      loadPosts(1);
+    }
+  }, [userId, token, loadPosts]);
+
+  useEffect(() => {
+    const storedToken = sessionStorage.getItem('token');
+    if (storedToken) {
+      const decoded = jwtDecode(storedToken);
+      setDecodedToken(decoded);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('token');
+    navigate('/login');
+  };
+
+  return (
+    <div className="container">
+      <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout} />
+      <div className="posts-container">
+        <h1>User Posts</h1>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <Posts
+          posts={posts}
+          pagination={pagination}
+          onPageChange={handlePageChange}
+        />
+      </div>
+    </div>
+  );
+};
 
 export default UserPostsPage;

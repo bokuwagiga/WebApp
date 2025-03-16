@@ -3,7 +3,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const Comments = ({ comments }) => {
-    console.log("Comments data:", comments); // Debugging line
+    console.log("Comments data:", comments);
 
     if (!comments || !Array.isArray(comments) || comments.length === 0) {
         return <p>No comments yet.</p>;

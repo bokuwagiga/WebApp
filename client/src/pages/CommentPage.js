@@ -34,7 +34,6 @@ const CommentPage = ({token}) => {
         fetchComment();
     }, [comment_id]);
 
-    // Decode token
     useEffect(() => {
         const storedToken = sessionStorage.getItem('token');
         if (storedToken) {
@@ -49,7 +48,6 @@ const CommentPage = ({token}) => {
     };
 
     const handleEditComment = () => {
-        // Set isEditing to true to render the textarea for editing
         setEditing(true);
         setEditedContent(comment.comment_content);
     };
@@ -94,7 +92,7 @@ const CommentPage = ({token}) => {
                 });
 
                 if (response.ok) {
-                    navigate('/posts'); // Navigate to the desired route after comment deletion
+                    navigate('/posts');
                 } else {
                     console.error('Error deleting comment:', response.statusText);
                 }

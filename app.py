@@ -345,12 +345,32 @@ def delete_user(user_id):
 # CRUD methods for Posts
 @app.route('/posts', methods=['GET'])
 def get_posts():
-    posts = (
-        Post.query.options(joinedload(Post.user)).order_by(Post.post_id.desc()).all()
-    )
-    post_list = [post.json() for post in posts]
-    return jsonify(post_list)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
 
+    total_posts = Post.query.count()
+
+    paginated_posts = (
+        Post.query.options(joinedload(Post.user))
+        .order_by(Post.post_id.desc())
+        .paginate(page=page, per_page=per_page, error_out=False)
+    )
+
+    post_list = [post.json() for post in paginated_posts.items]
+
+    pagination = {
+        'total': total_posts,
+        'pages': paginated_posts.pages,
+        'page': page,
+        'per_page': per_page,
+        'has_next': paginated_posts.has_next,
+        'has_prev': paginated_posts.has_prev
+    }
+
+    return jsonify({
+        'posts': post_list,
+        'pagination': pagination
+    })
 
 @app.route('/posts/<int:post_id>', methods=['GET'])
 def get_post(post_id):
@@ -438,15 +458,6 @@ def get_comments(post_id):
     return jsonify(comment_list)
 
 
-@app.route('/', methods=['GET'])
-def home():
-    posts = (
-        Post.query.options(joinedload(Post.user).joinedload(User.comments)).order_by(Post.post_id.desc()).all()
-    )
-    posts_list = [post.all_json() for post in posts]
-
-    return jsonify(posts_list)
-
 
 @app.route('/comments/<int:comment_id>', methods=['GET'])
 def get_comment_by_id(comment_id):
@@ -493,15 +504,29 @@ def delete_comment(comment_id):
 
 @app.route('/users/<int:user_id>/posts', methods=['GET'])
 def get_posts_by_user_id(user_id):
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
     user = get_resource_by_id(resource_model=User, resource_id=user_id, resource_name='User')
     if isinstance(user, tuple):
         return user
     else:
-        posts = Post.query.filter_by(user_id=user.user_id).order_by(Post.post_id.desc()).all()
-        user_posts = [post.all_json() for post in posts]
+        query = Post.query.filter_by(user_id=user.user_id).order_by(Post.post_id.desc())
+        total_posts = query.count()
+        paginated_posts = query.paginate(page=page, per_page=per_page, error_out=False)
+        user_posts = [post.all_json() for post in paginated_posts.items]
+        pagination = {
+            'total': total_posts,
+            'pages': paginated_posts.pages,
+            'page': page,
+            'per_page': per_page,
+            'has_next': paginated_posts.has_next,
+            'has_prev': paginated_posts.has_prev
+        }
         if user_posts:
-            print(jsonify(user_posts))
-            return jsonify(user_posts)
+            return jsonify({
+                'posts': user_posts,
+                'pagination': pagination
+            })
         else:
             return jsonify({"message": f"No posts found for user with ID {user_id}"}), 404
 

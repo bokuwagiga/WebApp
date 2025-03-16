@@ -36,15 +36,12 @@ const LoginPage = ({ onLogin }) => {
 
             if (response.ok) {
                 const data = await response.json();
-                // Store token in session storage
                 sessionStorage.setItem('token', data.token);
 
-                // Call onLogin function correctly
                 if (typeof onLogin === 'function') {
                     onLogin(data.token);
                 }
 
-                // Navigate to posts page
                 navigate('/posts');
             } else {
                 const errorData = await response.json().catch(() => ({ message: 'Login failed' }));

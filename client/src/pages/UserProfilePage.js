@@ -16,7 +16,7 @@ const UserProfilePage = ({token}) => {
     const [repeatNewPassword, setRepeatNewPassword] = useState('');
     const [isEditing, setEditing] = useState(false);
     const [isChangingPassword, setChangingPassword] = useState(false);
-    const navigate = useNavigate();  // Hook for navigation
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchUserData = async () => {
@@ -30,7 +30,7 @@ const UserProfilePage = ({token}) => {
                 if (response.ok) {
                     const userData = await response.json();
                     setUserData(userData);
-                    setEditedUsername(userData.username); // Set the initial edited username
+                    setEditedUsername(userData.username);
                 } else {
                     console.error('Failed to fetch user data:', response.statusText);
                 }

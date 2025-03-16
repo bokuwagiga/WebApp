@@ -5,7 +5,7 @@ import Comments from "./Comments";
 
 
 const Post = ({post}) => {
-    console.log("Post data:", post); // Debugging line
+    console.log("Post data:", post);
 
     return (
         <div key={post.post_id} className="post">
