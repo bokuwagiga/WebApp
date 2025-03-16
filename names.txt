@@ -1,0 +1,1505 @@
+
+// --- App.js ---
+// App.js
+
+import React, {useState, useEffect, useCallback} from 'react';
+import {useNavigate, Link} from 'react-router-dom';
+import LoginPage from './LoginPage';
+import Header from './components/Header';
+import {jwtDecode} from 'jwt-decode';
+import './styles/App.css';
+import Button from './components/Button';
+
+const App = () => {
+    const [token, setToken] = useState('');
+    const [posts, setPosts] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [decodedToken, setDecodedToken] = useState({});
+    const navigate = useNavigate();
+    const [showCreatePostForm, setShowCreatePostForm] = useState(false);
+    const [newPostContent, setNewPostContent] = useState('');
+    const [isCreatePostButtonVisible, setCreatePostButtonVisibility] = useState(true);
+
+    const fetchData = useCallback(async (token) => {
+        try {
+            const postsResponse = await fetch('/posts', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (postsResponse.ok) {
+                const postsData = await postsResponse.json();
+                const postsWithComments = await Promise.all(
+                    postsData.map(async (post) => {
+                        const commentsResponse = await fetch(`/posts/${post.post_id}/comments`, {
+                            headers: {
+                                Authorization: `Bearer ${token}`,
+                            },
+                        });
+
+                        if (commentsResponse.ok) {
+                            const commentsData = await commentsResponse.json();
+                            return {...post, comments: commentsData.comments};
+                        } else {
+                            console.error('Error fetching comments:', commentsResponse.statusText);
+                            return post;
+                        }
+                    })
+                );
+
+                setPosts(postsWithComments);
+            } else {
+                sessionStorage.removeItem('token');
+                navigate('/login');
+            }
+
+            const usersResponse = await fetch('/users', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (usersResponse.ok) {
+                const usersData = await usersResponse.json();
+                setUsers(usersData);
+            } else {
+                sessionStorage.removeItem('token');
+                navigate('/login');
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+        }
+    }, [navigate]);
+
+    const handleLogin = async (enteredToken) => {
+        sessionStorage.setItem('token', enteredToken);
+        setToken(enteredToken);
+
+        try {
+            const decoded = jwtDecode(enteredToken);
+            setDecodedToken(decoded);
+            await fetchData(enteredToken);
+            navigate('/posts');
+        } catch (error) {
+            console.error('Error decoding token:', error);
+            navigate('/login');
+        }
+    };
+
+    const handleLogout = () => {
+        sessionStorage.removeItem('token');
+        setToken('');
+        navigate('/login');
+    };
+
+    useEffect(() => {
+        const storedToken = sessionStorage.getItem('token');
+        if (storedToken) {
+            setToken(storedToken);
+            fetchData(storedToken);
+            const decoded = jwtDecode(storedToken);
+            setDecodedToken(decoded);
+        }
+    }, [fetchData]);
+
+    const handleCreatePost = async () => {
+        try {
+            const response = await fetch('/posts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({post_content: newPostContent}),
+            });
+
+            if (response.ok) {
+                console.log('Post created successfully');
+                window.location.reload();
+            } else {
+                console.error('Failed to create post:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error creating post:', error);
+        }
+    };
+
+    return (
+        <div className="container">
+            {token ? (
+                <>
+                    <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>
+                    <div className="page-content">
+                        <div className="users-container">
+                            <h1>Users</h1>
+                            {users.length === 0 ? (
+                                <p>Loading users...</p>
+                            ) : (
+                                <ul className="user-list">
+                                    {users.map((user) => (
+                                        <li key={user.user_id} className="user-item">
+                                            <Link to={`/users/${user.user_id}`} className="user-link">
+                                                {user.username}
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="posts-container" style={{width: "100%"}}>
+                            <div className="posts-header">
+                                <h1>Posts</h1>
+
+                                <Button
+                                    onClick={() => {
+                                        setShowCreatePostForm(true);
+                                        setCreatePostButtonVisibility(false);
+                                    }}
+                                    className={`post-button ${isCreatePostButtonVisible ? '' : 'hidden'}`}
+                                >
+                                    Create A New Post
+                                </Button>
+                            </div>
+
+
+                            {showCreatePostForm && (
+                                <div className="create-post-form">
+                                    <textarea
+                                        value={newPostContent}
+                                        onChange={(e) => setNewPostContent(e.target.value)}
+                                        placeholder="Enter your post content here..."
+                                        className="create-post-textarea"
+                                    />
+                                    <Button onClick={handleCreatePost} className="post-button">
+                                        Post
+                                    </Button>
+                                    <Button onClick={() => setShowCreatePostForm(false)} className="post-button">
+                                        Cancel
+                                    </Button>
+                                </div>
+                            )}
+
+                            {posts.length === 0 ? (
+                                <p>Loading posts...</p>
+                            ) : (
+                                posts.map((post) => (
+                                    <div key={post.post_id} className="post">
+                                        <div className="post-header">
+                                            Author:
+                                            <Link to={`/users/${post.user_id}`} className="user-link">
+                                                {post.user}
+                                            </Link>
+                                        </div>
+                                        <div className="post-content">{post.post_content}</div>
+                                        <div className="comments-section">
+                                            <h2 className="comments-heading">Comments</h2>
+                                            {post.comments && post.comments.length === 0 ? (
+                                                <p>No comments yet.</p>
+                                            ) : (
+                                                <ul className="comments-list">
+                                                    {post.comments.map((comment) => (
+                                                        <div key={comment.comment_id} className="comment-item">
+                                                            <Link
+                                                                to={`/users/${comment.user_id}`}
+                                                                className="user-link"
+                                                            >
+                                                                {comment.user}:
+                                                            </Link>
+                                                            <Link to={`/comments/${comment.comment_id}`}
+                                                                  className="comment-link">
+                                                                <span>{comment.comment_content}</span>
+                                                            </Link>
+                                                        </div>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                        <Link to={`/posts/${post.post_id}`} className="view-post-button">
+                                            View Post
+                                        </Link>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <LoginPage onLogin={handleLogin}/>
+            )}
+        </div>
+    );
+};
+
+export default App;
+
+
+// --- appContext.js ---
+import React, { useState, useEffect } from "react";
+import getState from "./flux.js";
+
+// Don't change, here is where we initialize our context, by default it's just going to be null.
+export const Context = React.createContext(null);
+
+// This function injects the global store to any view/component where you want to use it, we will inject the context to layout.js, you can see it here:
+// https://github.com/4GeeksAcademy/react-hello-webapp/blob/master/src/js/layout.js#L35
+const injectContext = PassedComponent => {
+	const StoreWrapper = props => {
+		//this will be passed as the contenxt value
+		const [state, setState] = useState(
+			getState({
+				getStore: () => state.store,
+				getActions: () => state.actions,
+				setStore: updatedStore =>
+					setState({
+						store: Object.assign(state.store, updatedStore),
+						actions: { ...state.actions }
+					})
+			})
+		);
+
+		useEffect(() => {
+			/**
+			 * EDIT THIS!
+			 * This function is the equivalent to "window.onLoad", it only runs once on the entire application lifetime
+			 * you should do your ajax requests or fetch api requests here. Do not use setState() to save data in the
+			 * store, instead use actions, like this:
+			 **/
+			state.actions.getMessage(); // <---- calling this function from the flux.js actions
+		}, []);
+
+		// The initial value for the context is not null anymore, but the current state of this component,
+		// the context will now have a getStore, getActions and setStore functions available, because they were declared
+		// on the state of this component
+		return (
+			<Context.Provider value={state}>
+				<PassedComponent {...props} />
+			</Context.Provider>
+		);
+	};
+	return StoreWrapper;
+};
+
+export default injectContext;
+
+
+
+// --- CommentPage.js ---
+// CommentPage.js
+
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
+import Header from './components/Header';
+import './styles/App.css';
+import Button from './components/Button';
+
+const CommentPage = ({ token }) => {
+  const { comment_id } = useParams();
+  const [comment, setComment] = useState(null);
+  const [decodedToken, setDecodedToken] = useState({});
+  const [editedContent, setEditedContent] = useState('');
+  const [isEditing, setEditing] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchComment = async () => {
+      try {
+        const commentResponse = await fetch(`/comments/${comment_id}`);
+
+        if (commentResponse.ok) {
+          const commentData = await commentResponse.json();
+          setComment(commentData);
+        } else {
+          console.error('Error fetching comment:', commentResponse.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching comment:', error);
+      }
+    };
+
+    fetchComment();
+  }, [comment_id]);
+
+  // Decode token
+  useEffect(() => {
+    const storedToken = sessionStorage.getItem('token');
+    if (storedToken) {
+      const decodedToken = jwtDecode(storedToken);
+      setDecodedToken(decodedToken);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('token');
+    navigate('/login');
+  };
+
+  const handleEditComment = () => {
+    // Set isEditing to true to render the textarea for editing
+    setEditing(true);
+    setEditedContent(comment.comment_content);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const response = await fetch(`/comments/${comment_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ comment_content: editedContent }),
+      });
+
+      if (response.ok) {
+        setEditing(false);
+        window.location.reload();
+      } else {
+        console.error('Error updating comment:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error updating comment:', error);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditedContent('');
+  };
+
+  const handleDeleteComment = async () => {
+    try {
+      const shouldDelete = window.confirm('Are you sure you want to delete this comment?');
+
+      if (shouldDelete) {
+        const response = await fetch(`/comments/${comment_id}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          navigate('/posts'); // Navigate to the desired route after comment deletion
+        } else {
+          console.error('Error deleting comment:', response.statusText);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+    }
+  };
+
+  return (
+    <div className="container">
+      <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout} />
+      <div className="comment-page">
+        <h1>Comment</h1>
+        {comment ? (
+          <div className="comment">
+            <div className="comment-header">
+              Author:
+              <Link to={`/users/${comment.user_id}`} className="user-link">
+                {comment.user}
+              </Link>
+              <div className="comment-actions">
+                {(decodedToken.user_id === comment.user_id || decodedToken.is_admin) && (
+                  <>
+                    {!isEditing && (
+                      <Button onClick={handleEditComment} className="post-button">
+                        Edit Comment
+                      </Button>
+                    )}
+                    <Button onClick={handleDeleteComment} className="delete-button">
+                      Delete Comment
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            {isEditing ? (
+              <div className="edit-comment-form">
+                <textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  placeholder="Enter the edited comment content..."
+                />
+                <Button onClick={handleSaveEdit} className="post-button">
+                  Save
+                </Button>
+                <Button onClick={handleCancelEdit} className="post-button">
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="comment-content">{comment.comment_content}</div>
+            )}
+          </div>
+        ) : (
+          <p>Loading comment...</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CommentPage;
+
+
+
+// --- flux.js ---
+const getState = ({ getStore, getActions, setStore }) => {
+	return {
+		store: {
+			message: null,
+			demo: [
+				{
+					title: "FIRST",
+					background: "white",
+					initial: "white"
+				},
+				{
+					title: "SECOND",
+					background: "white",
+					initial: "white"
+				}
+			]
+		},
+		actions: {
+			// Use getActions to call a function within a fuction
+			exampleFunction: () => {
+				getActions().changeColor(0, "green");
+			},
+
+			getMessage: async () => {
+				try{
+					// fetching data from the backend
+					const resp = await fetch(process.env.BACKEND_URL + "/api/hello")
+					const data = await resp.json()
+					setStore({ message: data.message })
+					// don't forget to return something, that is how the async resolves
+					return data;
+				}catch(error){
+					console.log("Error loading message from backend", error)
+				}
+			},
+			changeColor: (index, color) => {
+				//get the store
+				const store = getStore();
+
+				//we have to loop the entire demo array to look for the respective index
+				//and change its color
+				const demo = store.demo.map((elm, i) => {
+					if (i === index) elm.background = color;
+					return elm;
+				});
+
+				//reset the global store
+				setStore({ demo: demo });
+			}
+		}
+	};
+};
+
+export default getState;
+
+
+
+// --- Home.js ---
+import React, {useState, useEffect} from 'react';
+import {Link} from 'react-router-dom';
+import Button from './components/Button';
+
+// Import statements...
+
+const Home = () => {
+    const [posts, setPosts] = useState([]);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const response = await fetch('http://localhost:5000/');
+                if (response.ok) {
+                    const postData = await response.json();
+                    setPosts(postData);
+                } else {
+                    console.error('Failed to fetch posts:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error fetching posts:', error);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    return (
+        <div className="container">
+            <header className="header" style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
+                <h1 className="header-text">Home</h1>
+                <Link to="/login" className="button">
+                    <Button>Login</Button>
+                </Link>
+            </header>
+            <div className="page-content">
+                <div className="posts-container" style={{width: "100%"}}>
+                    {posts.length === 0 ? (
+                        <p className="loading-posts">Loading posts...</p>
+                    ) : (
+                        posts.map((post) => (
+                            <div key={post.post_id} className="post">
+                                <div className="post-header">
+                                    Author:
+                                    <Link to={`/login`} className="user-link">
+                                        {post.user}
+                                    </Link>
+                                </div>
+                                <h2 className="post-content">{post.post_content}</h2>
+
+                                {post.comments && post.comments.length > 0 ? (
+                                    <ul className="comments-list">
+                                        {post.comments.map((comment) => (
+                                            <li key={comment.comment_id}
+                                                className="comment-item">
+                                                <Link to={`/login`} className="user-link">
+                                                    {comment.user}
+                                                </Link>{comment.comment_content}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="no-comments">No comments yet.</p>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+};
+
+export default Home;
+
+
+
+// --- index.js ---
+// index.js
+
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter as Router } from 'react-router-dom';
+import MainApp from './MainApp';
+import reportWebVitals from './reportWebVitals';
+
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <Router>
+      <MainApp />
+    </Router>
+  </React.StrictMode>,
+);
+
+reportWebVitals();
+
+
+
+// --- LoginPage.js ---
+// LoginPage.js
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import './styles/App.css';
+import Button from './components/Button';
+
+const LoginPage = ({ onLogin }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const navigate = useNavigate();
+
+    const handleRegisterClick = () => {
+        navigate('/register');
+    };
+
+    const handleLogin = async () => {
+        if (!username || !password) {
+            setError('Please enter both username and password');
+            return;
+        }
+
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                // Store token in session storage
+                sessionStorage.setItem('token', data.token);
+
+                // Call onLogin function correctly
+                if (typeof onLogin === 'function') {
+                    onLogin(data.token);
+                }
+
+                // Navigate to posts page
+                navigate('/posts');
+            } else {
+                const errorData = await response.json().catch(() => ({ message: 'Login failed' }));
+                setError(errorData.message || `Login failed: ${response.statusText}`);
+            }
+        } catch (error) {
+            setError('Network error. Please try again later.');
+            console.error('Error during login:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="login-page">
+            <header className="header">
+                <h1>Login</h1>
+            </header>
+            {error && <div className="error-message">{error}</div>}
+            <div>
+                <label>Username:</label>
+                <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="username"
+                    className="login-input"
+                    disabled={isLoading}
+                />
+            </div>
+            <div>
+                <label>Password:</label>
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    placeholder="password"
+                    className="login-input"
+                    disabled={isLoading}
+                />
+            </div>
+            <Button
+                onClick={handleLogin}
+                className="login-button"
+                disabled={isLoading}
+            >
+                {isLoading ? 'Logging in...' : 'Login'}
+            </Button>
+            <Button
+                onClick={handleRegisterClick}
+                className="register-button"
+                disabled={isLoading}
+            >
+                Register
+            </Button>
+        </div>
+    );
+};
+
+export default LoginPage;
+
+
+// --- MainApp.js ---
+// MainApp.js
+
+import React, { useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import App from './App';
+import UserProfilePage from './UserProfilePage';
+import LoginPage from './LoginPage';
+import RegisterPage from './RegisterPage';
+import PostPage from './PostPage';
+import Home from './Home';
+import CommentPage from './CommentPage';
+import UserPostsPage from './UserPostsPage';
+
+import './styles/App.css';
+
+const MainApp = () => {
+    const [token, setToken] = useState(null);
+    const storedToken = sessionStorage.getItem('token');
+
+    const handleLogin = (enteredToken) => {
+        setToken(enteredToken);
+    };
+
+    return (
+        <Routes>
+            <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/posts" element={<App />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/users/:userId" element={<UserProfilePage token={storedToken || token} />} />
+            <Route path="/posts/:post_id" element={<PostPage token={storedToken || token} />} />
+            <Route path="/comments/:comment_id" element={<CommentPage token={storedToken || token} />} />
+            <Route path="/users/:userId/posts" element={<UserPostsPage token={storedToken || token} />} />
+        </Routes>
+    );
+};
+
+export default MainApp;
+
+
+// --- PostPage.js ---
+import React, {useState, useEffect} from 'react';
+import {useParams, Link, useNavigate} from 'react-router-dom';
+import {jwtDecode} from 'jwt-decode';
+import Header from './components/Header';
+import './styles/App.css';
+import Button from './components/Button';
+
+const PostPage = ({token}) => {
+    const {post_id} = useParams();
+    const [post, setPost] = useState(null);
+    const [decodedToken, setDecodedToken] = useState({});
+    const [commentContent, setCommentContent] = useState('');
+    const [isCommentFormVisible, setCommentFormVisibility] = useState(false);
+    const [isEditing, setEditing] = useState(false);
+    const [updatedContent, setUpdatedContent] = useState('');
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchPost = async () => {
+            try {
+                const postResponse = await fetch(`/posts/${post_id}`);
+                const commentsResponse = await fetch(`/posts/${post_id}/comments`);
+
+                if (postResponse.ok && commentsResponse.ok) {
+                    const postData = await postResponse.json();
+                    const commentsData = await commentsResponse.json();
+
+                    // Merge comments into the post data
+                    const postWithComments = {...postData, comments: commentsData.comments};
+
+                    setPost(postWithComments);
+                } else {
+                    console.error('Error fetching post or comments:', postResponse.statusText, commentsResponse.statusText);
+                }
+            } catch (error) {
+                console.error('Error fetching post or comments:', error);
+            }
+        };
+
+        fetchPost();
+    }, [post_id]);
+
+    // Handle logout
+    const handleLogout = () => {
+        sessionStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    const handleAddComment = async () => {
+        try {
+            const response = await fetch(`/posts/${post_id}/comments`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({comment_content: commentContent}),
+            });
+
+            if (response.ok) {
+                setCommentFormVisibility(false);
+                window.location.reload();
+            } else {
+                console.error('Error adding comment:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error adding comment:', error);
+        }
+    };
+
+    // Decode token
+    useEffect(() => {
+        const storedToken = sessionStorage.getItem('token');
+        if (storedToken) {
+            const decodedToken = jwtDecode(storedToken);
+            setDecodedToken(decodedToken);
+        }
+    }, []);
+
+    // Handle post update
+    const handleUpdatePost = async () => {
+        try {
+            // Set isEditing to true to render the textarea for editing
+            setEditing(true);
+            setUpdatedContent(post.post_content);
+        } catch (error) {
+            console.error('Error updating post:', error);
+        }
+    };
+
+    const handleSaveUpdate = async () => {
+        try {
+            const response = await fetch(`/posts/${post_id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({post_content: updatedContent}),
+            });
+
+            if (response.ok) {
+                // Reset isEditing state after saving the update
+                setEditing(false);
+                // Reload the page to reflect the changes
+                window.location.reload();
+            } else {
+                console.error('Error updating post:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error updating post:', error);
+        }
+    };
+
+    const handleCancelUpdate = () => {
+        // Reset isEditing state without saving the update
+        setEditing(false);
+        setUpdatedContent('');
+    };
+
+    const handleDeletePost = async () => {
+        try {
+            const shouldDelete = window.confirm('Are you sure you want to delete this post?');
+
+            if (shouldDelete) {
+                const response = await fetch(`/posts/${post_id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                if (response.ok) {
+                    navigate('/posts');
+                } else {
+                    console.error('Error deleting post:', response.statusText);
+                }
+            }
+        } catch (error) {
+            console.error('Error deleting post:', error);
+        }
+    };
+
+    return (
+        <div className="container">
+            <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>
+            <div className="post-page">
+                <h1>Post</h1>
+                {post ? (
+                    <div className="posts-container">
+                        <div className="post">
+                            <div className="post-header">
+                                Author:
+                                <Link to={`/users/${post.user_id}`} className="user-link">
+                                    {post.user}
+                                </Link>
+                                <div className="post-actions">
+                                    {(decodedToken.user_id === post.user_id || decodedToken.is_admin) && (
+                                        <>
+                                            {!isEditing && (
+                                                <Button onClick={handleUpdatePost} className="edit-post-button">
+                                                    Edit Post
+                                                </Button>
+                                            )}
+                                            <Button onClick={handleDeletePost} className="delete-button">
+                                                Delete Post
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            {isEditing ? (
+                                <div className="update-post-form">
+                <textarea
+                    value={updatedContent}
+                    onChange={(e) => setUpdatedContent(e.target.value)}
+                    placeholder="Enter the updated post content..."
+                />
+                                    <Button onClick={handleSaveUpdate} className="post-button">
+                                        Save
+                                    </Button>
+                                    <Button onClick={handleCancelUpdate} className="post-button">
+                                        Cancel
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="post-content">{post.post_content}</div>
+                            )}
+                            <div className="comments-section">
+                                <h2 className="comments-heading">Comments</h2>
+                                {post.comments && post.comments.length === 0 ? (
+                                    <p>No comments yet.</p>
+                                ) : (
+                                    <ul className="comments-list">
+                                        {post.comments &&
+                                            post.comments.map((comment) => (
+                                                <div key={comment.comment_id} className="comment-item">
+                                                    <Link to={`/users/${comment.user_id}`} className="user-link">
+                                                        {comment.user}:
+                                                    </Link>
+                                                    <Link to={`/comments/${comment.comment_id}`}
+                                                          className="comment-link">
+                                                        <span>{comment.comment_content}</span>
+                                                    </Link>
+                                                </div>
+                                            ))}
+                                    </ul>
+                                )}
+                            </div>
+                            {!isCommentFormVisible && (
+                                <Button onClick={() => setCommentFormVisibility(true)} className="post-button">
+                                    Add Comment
+                                </Button>
+                            )}
+                            {isCommentFormVisible && (
+                                <div className="add-comment-section">
+                <textarea
+                    className="create-post-textarea"
+                    value={commentContent}
+                    onChange={(e) => setCommentContent(e.target.value)}
+                    placeholder="Add your comment..."
+                />
+                                    <Button onClick={handleAddComment} className="post-button">
+                                        Comment
+                                    </Button>
+                                    <Button onClick={() => setCommentFormVisibility(false)} className="post-button">
+                                        Cancel
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <p>Loading post...</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default PostPage;
+
+
+
+// --- RegisterPage.js ---
+import React, {useState} from 'react';
+import {Link, useNavigate} from 'react-router-dom';
+import './styles/App.css';
+import Button from './components/Button';
+
+const RegisterPage = ({onRegister}) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [repeatPassword, setRepeatPassword] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
+    const navigate = useNavigate();
+
+    const handleRegister = async () => {
+        try {
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({username, password, repeat_password: repeatPassword}),
+            });
+
+            if (response.ok) {
+                navigate('/login');
+                const data = await response.json();
+                onRegister(data);
+            } else {
+                const errorData = await response.json();
+                setErrorMessage(errorData.message || 'Registration failed, enter valid data!');
+            }
+        } catch (error) {
+            console.error('Error during registration:', error);
+            setErrorMessage('An unexpected error occurred.');
+        }
+    };
+
+    return (
+        <div className="login-page">
+            <header className="header">
+                <h1 className="register-title">Register</h1>
+            </header>
+            {/* Display the error message */}
+            {errorMessage && (
+                <div className="error-message">
+                    <p className="delete-button">{errorMessage}</p>
+                </div>
+            )}
+
+            <div className="register-input-group">
+                <label className="register-label">Username:</label><br></br>
+                <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="username"
+                    className="login-input"
+                />
+            </div>
+            <br></br>
+            <div className="register-input-group">
+                <label className="register-label">Password:</label><br></br>
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="password"
+                    className="login-input"
+                />
+            </div>
+            <br></br>
+            <div className="register-input-group">
+                <label className="register-label">Repeat Password:</label><br></br>
+                <input
+                    type="password"
+                    value={repeatPassword}
+                    onChange={(e) => setRepeatPassword(e.target.value)}
+                    placeholder="repeat password"
+                    className="login-input"
+                />
+            </div>
+            <br></br>
+            <Button onClick={handleRegister} className="register-button">
+                Register
+            </Button>
+                <Link to="/login" className="button">
+                    <Button>Login</Button>
+                </Link>
+        </div>
+    );
+};
+
+export default RegisterPage;
+
+
+
+// --- reportWebVitals.js ---
+const reportWebVitals = onPerfEntry => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+
+
+
+// --- setupTests.js ---
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+
+
+// --- UserPostsPage.js ---
+import React, {useEffect, useState} from 'react';
+import {useParams, useNavigate, Link} from 'react-router-dom';
+import Header from './components/Header';
+import './styles/App.css';
+import {jwtDecode} from "jwt-decode";
+
+const UserPostsPage = ({token}) => {
+    const [decodedToken, setDecodedToken] = useState({});
+    const {userId} = useParams();
+    const [posts, setPosts] = useState([]);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+const fetchUserPosts = async () => {
+    try {
+        const response = await fetch(`http://127.0.0.1:5000/users/${userId}/posts`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        if (response.ok) {
+            const postsData = await response.json();
+            console.log('Fetched posts:', postsData); // Debugging output
+            setPosts(postsData);
+        } else {
+            console.error('Failed to fetch posts:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Error fetching posts:', error);
+    }
+};
+
+        if (userId && token) {
+            fetchUserPosts();
+        }
+    }, [userId, token]);
+
+    useEffect(() => {
+        const storedToken = sessionStorage.getItem('token');
+        if (storedToken) {
+            const decoded = jwtDecode(storedToken);
+            setDecodedToken(decoded);
+        }
+    }, []);
+
+
+    const handleLogout = () => {
+        sessionStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    return (
+        <div className="container">
+            <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>
+            <div className="posts-container">
+                <h1>Posts</h1>
+                {posts.length === 0 ? (
+                    <p>Loading posts...</p>
+                ) : (
+                    posts.map((post) => (
+                        <div key={post.post_id} className="post">
+                            <div className="post-header">
+                                Author:
+                                <Link to={`/users/${post.user_id}`} className="user-link">
+                                    {post.user}
+                                </Link>
+                            </div>
+                            <div className="post-content">{post.post_content}</div>
+                            <div className="comments-section">
+                                <h2 className="comments-heading">Comments</h2>
+                                {post.comments && Array.isArray(post.comments) && post.comments.length === 0 ? (
+                                    <p>No comments yet.</p>
+                                ) : (
+                                    <ul className="comments-list">
+                                        {Array.isArray(post.comments) && post.comments.map((comment) => (
+                                            <div key={comment.comment_id} className="comment-item">
+                                                <Link to={`/users/${comment.user_id}`} className="user-link">
+                                                    {comment.user}:
+                                                </Link>
+                                                <Link to={`/comments/${comment.comment_id}`} className="comment-link">
+                                                    <span>{comment.comment_content}</span>
+                                                </Link>
+                                            </div>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                            <Link to={`/posts/${post.post_id}`} className="view-post-button">
+                                View Post
+                            </Link>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default UserPostsPage;
+
+
+
+// --- UserProfilePage.js ---
+import React, {useEffect, useState} from 'react';
+import {useParams, useNavigate} from 'react-router-dom';
+import Header from './components/Header';
+import './styles/App.css';
+import {jwtDecode} from 'jwt-decode';
+import Button from './components/Button';
+
+const UserProfilePage = ({token}) => {
+    const [decodedToken, setDecodedToken] = useState({});
+    const {userId} = useParams();
+    const [userData, setUserData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [editedUsername, setEditedUsername] = useState('');
+    const [editedPassword, setEditedPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [repeatNewPassword, setRepeatNewPassword] = useState('');
+    const [isEditing, setEditing] = useState(false);
+    const [isChangingPassword, setChangingPassword] = useState(false);
+    const navigate = useNavigate();  // Hook for navigation
+
+    useEffect(() => {
+        const fetchUserData = async () => {
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/users/${userId}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    setUserData(userData);
+                    setEditedUsername(userData.username); // Set the initial edited username
+                } else {
+                    console.error('Failed to fetch user data:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (userId && token) {
+            fetchUserData();
+        }
+    }, [userId, token]);
+
+    const handleLogout = () => {
+        sessionStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    useEffect(() => {
+        const storedToken = sessionStorage.getItem('token');
+        if (storedToken) {
+            const decoded = jwtDecode(storedToken);
+            setDecodedToken(decoded);
+        }
+    }, []);
+
+    const handleEditProfile = () => {
+        setEditing(false);
+        setChangingPassword(true);
+    };
+
+    const handleSaveEdit = async () => {
+        try {
+            const bodyData = {username: editedUsername, password: editedPassword};
+
+            if (isChangingPassword) {
+                bodyData.new_password = newPassword;
+                bodyData.repeat_new_password = repeatNewPassword;
+            }
+
+            const response = await fetch(`http://127.0.0.1:5000/users/${userId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(bodyData),
+            });
+
+            if (response.ok) {
+                navigate('/login');
+
+            } else {
+                console.error('Error updating user profile:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error updating user profile:', error);
+        }
+    };
+
+
+    const handleCancelEdit = () => {
+        setEditing(false);
+        setChangingPassword(false);
+        setEditedUsername('');
+        setEditedPassword('');
+        setNewPassword('');
+        setRepeatNewPassword('');
+    };
+
+    const handleDeleteProfile = async () => {
+        try {
+            const shouldDelete = window.confirm('Are you sure you want to delete your profile?');
+
+            if (shouldDelete) {
+                const response = await fetch(`http://127.0.0.1:5000/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                if (response.ok) {
+                    navigate('/login');
+                } else {
+                    console.error('Error deleting user profile:', response.statusText);
+                }
+            }
+        } catch (error) {
+            console.error('Error deleting user profile:', error);
+        }
+    };
+
+    // Navigate to the user's posts page
+    const handleViewPosts = () => {
+        navigate(`/users/${userId}/posts`);
+    };
+
+    return (
+        <div className="container">
+            <Header token={token} decodedToken={decodedToken} handleLogout={handleLogout}/>
+            <div className="user-profile">
+                <h1>User Profile</h1>
+                {loading ? (
+                    <p className="loading-message">Loading user profile...</p>
+                ) : userData ? (
+                    <div className="profile-info">
+                        {isEditing || isChangingPassword ? (
+                            <div className="edit-profile-form">
+                                {isChangingPassword && (
+                                    <>
+                                        <div>
+                                            <label>Username:</label>
+                                            <input
+                                                className="login-input"
+                                                type="text"
+                                                value={editedUsername}
+                                                onChange={(e) => setEditedUsername(e.target.value)}
+                                                placeholder="Username..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>Password:</label>
+                                            <input
+                                                className="login-input"
+                                                type="password"
+                                                value={editedPassword}
+                                                onChange={(e) => setEditedPassword(e.target.value)}
+                                                placeholder="Password..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>New Password (Optional):</label>
+                                            <input
+                                                className="login-input"
+                                                type="password"
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                                placeholder="New password..."
+                                            />
+                                        </div>
+                                        <div>
+                                            <label>Repeat New Password:</label>
+                                            <input
+                                                className="login-input"
+                                                type="password"
+                                                value={repeatNewPassword}
+                                                onChange={(e) => setRepeatNewPassword(e.target.value)}
+                                                placeholder="Repeat new password..."
+                                            />
+                                        </div>
+                                    </>
+                                )}
+
+                                <Button onClick={handleSaveEdit} className="post-button">
+                                    Save
+                                </Button>
+                                <Button onClick={handleCancelEdit} className="post-button">
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : (
+                            <>
+                                <p>User ID: {userData.user_id}</p>
+                                <p>Username: {userData.username}</p>
+                                {(decodedToken.user_id === userData.user_id || decodedToken.is_admin) && (
+                                    <>
+                                        <Button onClick={handleEditProfile} className="post-button">
+                                            Edit Profile
+                                        </Button>
+                                        <Button onClick={handleDeleteProfile} className="delete-button">
+                                            Delete Profile
+                                        </Button>
+                                    </>
+                                )}
+                                <Button onClick={handleViewPosts} className="post-button">
+                                    View Posts
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                ) : (
+                    <p className="error-message">Failed to load user profile.</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default UserProfilePage;
+
+
+
+// --- Button.js ---
+import React from "react";
+
+const Button = ({onClick, children, className = ""}) => {
+    return (
+        <button onClick={onClick} className={`button ${className}`}>
+            {children}
+        </button>
+    );
+};
+
+export default Button;
+
+
+
+// --- Header.js ---
+// Header.js
+import React from 'react';
+import {Link} from 'react-router-dom';
+import Button from './Button';
+
+const Header = ({token, decodedToken, handleLogout}) => {
+    return (
+        <header className="header">
+            <div>
+                <Link to="/posts" className="button">
+          <Button>Posts</Button>
+                </Link>
+
+                <Link to={token ? `/users/${decodedToken.user_id}` : '/login'} className="button">
+          <Button>My Profile</Button>
+                </Link>
+
+            </div>
+            <div>
+        <Button className="logout-button" onClick={handleLogout}>
+          Logout
+        </Button>
+            </div>
+        </header>
+    );
+};
+
+export default Header;
+

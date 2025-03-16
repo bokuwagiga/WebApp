@@ -1,0 +1,31 @@
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.env
+.env
+
+# Flask
+migrations/
+instance/
+.webassets-cache
+
+# PyCharm
+.idea/
+*.iml
+
+# Node
+client/node_modules/
+*npm-debug.log
+*yarn-error.log
+
+# React
+build/
+.DS_Store
+
+# Logs
+*.log
+
+# Virtual Environment
+venv/
