@@ -1,8 +1,8 @@
 // src/components/Comments.js
 import React from 'react';
-import { Link } from 'react-router-dom';
+import {Link} from 'react-router-dom';
 
-const Comments = ({ comments }) => {
+const Comments = ({comments}) => {
     console.log("Comments data:", comments);
 
     if (!comments || !Array.isArray(comments) || comments.length === 0) {
@@ -15,9 +15,13 @@ const Comments = ({ comments }) => {
             <ul className="comments-list">
                 {comments.map((comment) => (
                     <div key={comment.comment_id} className="comment-item">
-                        <Link to={`/users/${comment.user_id}`} className="user-link">
-                            {comment.user}:
-                        </Link>
+                        <div className="header-info">
+                            {new Date(comment.last_updated + 'Z').toLocaleString(undefined, {hour12: false})}
+
+                            <Link to={`/users/${comment.user_id}`} className="user-link">
+                                #{comment.user}:
+                            </Link>
+                        </div>
                         <Link to={`/comments/${comment.comment_id}`} className="comment-link">
                             <span>{comment.comment_content}</span>
                         </Link>

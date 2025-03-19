@@ -191,7 +191,7 @@ const App = () => {
                                 {users.map((user) => (
                                     <li key={user.user_id} className="user-item">
                                         <Link to={`/users/${user.user_id}`} className="user-link">
-                                            {user.username}
+                                            #{user.username}
                                         </Link>
                                     </li>
                                 ))}

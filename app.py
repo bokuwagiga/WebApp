@@ -1,4 +1,4 @@
-# app.py
+#app.py
 import random
 from datetime import datetime, timedelta
 import jwt
@@ -10,6 +10,7 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, joinedload
 from werkzeug.exceptions import BadRequest
@@ -32,9 +33,10 @@ class User(Base, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(60), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    last_updated = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
 
     posts = db.relationship('Post', backref='user', lazy=True, cascade='all, delete-orphan')
-    comments = db.relationship('Comment', backref='user', lazy=True, cascade='all, delete-orphan',)
+    comments = db.relationship('Comment', backref='user', lazy=True, cascade='all, delete-orphan', )
 
     def json(self, exclude_keys=None):
         if exclude_keys is None:
@@ -45,6 +47,7 @@ class User(Base, db.Model):
                 'user_id': self.user_id,
                 'username': self.username,
                 'is_admin': self.is_admin,
+                'last_updated': self.last_updated.isoformat() if self.last_updated else None,
             }.items()
             if key not in exclude_keys
         }
@@ -62,6 +65,7 @@ class Post(Base, db.Model):
     post_id = db.Column(db.Integer, db.Sequence('post_id_seq'), primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
     post_content = db.Column(db.Text, nullable=False)
+    last_updated = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
 
     def json(self, exclude_keys=None):
         if exclude_keys is None:
@@ -74,6 +78,7 @@ class Post(Base, db.Model):
                 'user_id': self.user_id,
                 'post_content': self.post_content,
                 'user': self.user.username,
+                'last_updated': self.last_updated.isoformat() if self.last_updated else None,
             }.items()
             if key not in exclude_keys
         }
@@ -89,6 +94,7 @@ class Post(Base, db.Model):
                 'user_id': self.user_id,
                 'post_content': self.post_content,
                 'user': self.user.username,
+                'last_updated': self.last_updated.isoformat() if self.last_updated else None,
                 'comments': [comment.json(['comment_id', 'post_id', 'user_id']) for comment in self.comments]
             }.items()
             if key not in exclude_keys
@@ -96,7 +102,7 @@ class Post(Base, db.Model):
 
         return post_json
 
-    comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan',)
+    comments = db.relationship('Comment', backref='post', lazy=True, cascade='all, delete-orphan', )
 
 
 class Comment(Base, db.Model):
@@ -106,6 +112,7 @@ class Comment(Base, db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('posts.post_id'), nullable=False)
     comment_content = db.Column(db.Text, nullable=False)
+    last_updated = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
 
     def json(self, exclude_keys=None):
         if exclude_keys is None:
@@ -118,7 +125,8 @@ class Comment(Base, db.Model):
                 'post_id': self.post_id,
                 'user_id': self.user_id,
                 'user': self.user.username,
-                'comment_content': self.comment_content
+                'comment_content': self.comment_content,
+                'last_updated': self.last_updated.isoformat() if self.last_updated else None
             }.items()
             if key not in exclude_keys
         }
@@ -227,7 +235,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and bcrypt.check_password_hash(user.password, password):
             token = jwt.encode({'user_id': user.user_id, 'is_admin': user.is_admin, 'user': user.username,
-                                'exp': datetime.utcnow() + timedelta(minutes=30)},
+                                'exp': func.now()() + timedelta(minutes=30)},
                                app.config['SECRET_KEY'])
             response = make_response(jsonify({'token': token}))
             response.set_cookie('token', token, httponly=True)
@@ -245,7 +253,18 @@ def login():
 # CRUD methods for users
 @app.route('/users', methods=['GET'])
 def get_users():
-    users = User.query.order_by(User.username).all()
+    sort_by = request.args.get('sort_by', 'post_id')
+    order = request.args.get('order', 'desc')
+    if sort_by == 'username':
+        sort_column = User.usename
+    else:
+        sort_column = User.last_updated
+
+    if order.lower() == 'asc':
+        sort_column = sort_column.asc()
+    else:
+        sort_column = sort_column.desc()
+    users = User.query.order_by(sort_column).all()
     if hasattr(g, 'user') and g.user.is_admin:
         users_list = [user.json() for user in users]
     else:
@@ -347,12 +366,24 @@ def delete_user(user_id):
 def get_posts():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
+    sort_by = request.args.get('sort_by', 'post_id')
+    order = request.args.get('order', 'desc')
 
     total_posts = Post.query.count()
 
+    if sort_by == 'last_updated':
+        sort_column = Post.last_updated
+    else:
+        sort_column = Post.post_id
+
+    if order.lower() == 'asc':
+        sort_column = sort_column.asc()
+    else:
+        sort_column = sort_column.desc()
+
     paginated_posts = (
         Post.query.options(joinedload(Post.user))
-        .order_by(Post.post_id.desc())
+        .order_by(sort_column)
         .paginate(page=page, per_page=per_page, error_out=False)
     )
 
@@ -400,6 +431,8 @@ def create_post():
 def update_post(post_id):
     try:
         post = get_resource_by_id(resource_model=Post, resource_id=post_id, resource_name='Post')
+        if isinstance(post, tuple):
+            return post
         if not g.user or (not g.user.is_admin and g.user.user_id != post.user_id):
             return jsonify({'message': 'Unauthorized. Only the user who created the post can update it.'}), 401
 
@@ -449,14 +482,32 @@ def create_comment(post_id):
 @app.route('/posts/<int:post_id>/comments', methods=['GET'])
 def get_comments(post_id):
     post = get_resource_by_id(resource_model=Post, resource_id=post_id, resource_name='Post')
+    if isinstance(post, tuple):
+        return post
+
+    sort_by = request.args.get('sort_by', 'comment_id')
+    order = request.args.get('order', 'desc')
+
+    if sort_by == 'last_updated':
+        sort_column = Comment.last_updated
+    else:
+        sort_column = Comment.comment_id
+
+    if order.lower() == 'asc':
+        sort_column = sort_column.asc()
+    else:
+        sort_column = sort_column.desc()
+
     comments = (
-        Comment.query.options(joinedload(Comment.post).joinedload(Post.user)).filter_by(post_id=post_id).order_by(Comment.comment_id.desc()).all()
+        Comment.query.options(joinedload(Comment.post).joinedload(Post.user))
+        .filter_by(post_id=post_id)
+        .order_by(sort_column)
+        .all()
     )
     comment_list = post.json()
     comment_list['comments'] = [comment.json() for comment in comments]
 
     return jsonify(comment_list)
-
 
 
 @app.route('/comments/<int:comment_id>', methods=['GET'])
@@ -472,6 +523,8 @@ def get_comment_by_id(comment_id):
 def update_comment(comment_id):
     try:
         comment = get_resource_by_id(resource_model=Comment, resource_id=comment_id, resource_name='Comment')
+        if isinstance(comment, tuple):
+            return comment
         if not g.user or (g.user.user_id != comment.user_id and not g.user.is_admin):
             return jsonify(
                 {'message': 'Unauthorized. Only admins or the user who created the comment can update it.'}), 401
@@ -506,29 +559,42 @@ def delete_comment(comment_id):
 def get_posts_by_user_id(user_id):
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
+    sort_by = request.args.get('sort_by', 'post_id')
+    order = request.args.get('order', 'desc')
+
     user = get_resource_by_id(resource_model=User, resource_id=user_id, resource_name='User')
     if isinstance(user, tuple):
         return user
+
+    if sort_by == 'last_updated':
+        sort_column = Post.last_updated
     else:
-        query = Post.query.filter_by(user_id=user.user_id).order_by(Post.post_id.desc())
-        total_posts = query.count()
-        paginated_posts = query.paginate(page=page, per_page=per_page, error_out=False)
-        user_posts = [post.all_json() for post in paginated_posts.items]
-        pagination = {
-            'total': total_posts,
-            'pages': paginated_posts.pages,
-            'page': page,
-            'per_page': per_page,
-            'has_next': paginated_posts.has_next,
-            'has_prev': paginated_posts.has_prev
-        }
-        if user_posts:
-            return jsonify({
-                'posts': user_posts,
-                'pagination': pagination
-            })
-        else:
-            return jsonify({"message": f"No posts found for user with ID {user_id}"}), 404
+        sort_column = Post.post_id
+
+    if order.lower() == 'asc':
+        sort_column = sort_column.asc()
+    else:
+        sort_column = sort_column.desc()
+
+    query = Post.query.filter_by(user_id=user.user_id).order_by(sort_column)
+    total_posts = query.count()
+    paginated_posts = query.paginate(page=page, per_page=per_page, error_out=False)
+    user_posts = [post.all_json() for post in paginated_posts.items]
+    pagination = {
+        'total': total_posts,
+        'pages': paginated_posts.pages,
+        'page': page,
+        'per_page': per_page,
+        'has_next': paginated_posts.has_next,
+        'has_prev': paginated_posts.has_prev
+    }
+    if user_posts:
+        return jsonify({
+            'posts': user_posts,
+            'pagination': pagination
+        })
+    else:
+        return jsonify({"message": f"No posts found for user with ID {user_id}"}), 404
 
 
 @app.cli.command("populate_db")

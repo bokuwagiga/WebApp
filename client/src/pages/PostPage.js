@@ -143,10 +143,13 @@ const PostPage = ({token}) => {
                     <div className="posts-container">
                         <div className="post">
                             <div className="post-header">
-                                Author:
-                                <Link to={`/users/${post.user_id}`} className="user-link">
-                                    {post.user}
-                                </Link>
+                                <div className="header-info">
+                                    {new Date(post.last_updated + 'Z').toLocaleString(undefined, {hour12: false})}
+
+                                    <Link to={`/users/${post.user_id}`} className="user-link">
+                                        #{post.user}
+                                    </Link>
+                                </div>
                                 <div className="post-actions">
                                     {(decodedToken.user_id === post.user_id || decodedToken.is_admin) && (
                                         <>
