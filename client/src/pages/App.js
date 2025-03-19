@@ -16,6 +16,7 @@ const App = () => {
     const [showCreatePostForm, setShowCreatePostForm] = useState(false);
     const [newPostContent, setNewPostContent] = useState('');
     const [isCreatePostButtonVisible, setCreatePostButtonVisibility] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const fetchPostsAuth = useCallback(async (page, perPage) => {
         if (!token) return null;
@@ -40,7 +41,7 @@ const App = () => {
                         return {...post, comments: commentsData.comments};
                     } else {
                         console.error('Error fetching comments:', commentsResponse.statusText);
-                        return post;
+                        return {...post, comments: []};
                     }
                 })
             );
@@ -53,12 +54,30 @@ const App = () => {
 
     const fetchPostsPublic = useCallback(async (page, perPage) => {
         try {
+            console.log(`Fetching public posts for page ${page}, perPage ${perPage}`);
             const response = await fetch(`http://localhost:5000/posts?page=${page}&per_page=${perPage}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch posts');
             }
             const data = await response.json();
-            return {posts: data.posts, pagination: data.pagination};
+            const postsWithComments = await Promise.all(
+                data.posts.map(async (post) => {
+                    try {
+                        const commentsResponse = await fetch(`http://localhost:5000/posts/${post.post_id}/comments`);
+                        if (commentsResponse.ok) {
+                            const commentsData = await commentsResponse.json();
+                            return {...post, comments: commentsData.comments};
+                        } else {
+                            return {...post, comments: []};
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching comments for post ${post.post_id}:`, error);
+                        return {...post, comments: []};
+                    }
+                })
+            );
+
+            return {posts: postsWithComments, pagination: data.pagination};
         } catch (error) {
             console.error('Error fetching public posts:', error);
             throw error;
@@ -73,33 +92,46 @@ const App = () => {
         handlePageChange
     } = usePagination(token ? fetchPostsAuth : fetchPostsPublic);
 
-const fetchData = useCallback(async (enteredToken) => {
-    if (enteredToken === token) return;
-    try {
-        await loadPosts(1);
-        if (enteredToken) {
-            const usersResponse = await fetch('/users', {
-                headers: {
-                    Authorization: `Bearer ${enteredToken}`,
-                },
-            });
-            if (usersResponse.ok) {
-                const usersData = await usersResponse.json();
-                setUsers(usersData);
-            } else {
-                if (usersResponse.status === 401) {
-                    sessionStorage.removeItem('token');
-                    navigate('/login');
+    const customPageChangeHandler = useCallback((page) => {
+        console.log(`Changing to page ${page}`);
+        setCurrentPage(page);
+        handlePageChange(page);
+    }, [handlePageChange]);
+
+    useEffect(() => {
+        loadPosts(currentPage);
+    }, [token, loadPosts, currentPage]);
+
+    const fetchData = useCallback(async (enteredToken) => {
+        if (!enteredToken) return;
+
+        try {
+            if (enteredToken) {
+                const usersResponse = await fetch('/users', {
+                    headers: {
+                        Authorization: `Bearer ${enteredToken}`,
+                    },
+                });
+                if (usersResponse.ok) {
+                    const usersData = await usersResponse.json();
+                    setUsers(usersData);
+                } else {
+                    if (usersResponse.status === 401) {
+                        sessionStorage.removeItem('token');
+                        setToken('');
+                        navigate('/login');
+                    }
                 }
             }
+        } catch (error) {
+            console.error('Error fetching data:', error);
         }
-    } catch (error) {
-        console.error('Error fetching data:', error);
-    }
-}, [loadPosts, navigate, token]);
+    }, [navigate]);
+
     const handleLogout = () => {
         sessionStorage.removeItem('token');
         setToken('');
+        setCurrentPage(1);
         navigate('/login');
     };
 
@@ -107,13 +139,13 @@ const fetchData = useCallback(async (enteredToken) => {
         const storedToken = sessionStorage.getItem('token');
         if (storedToken) {
             setToken(storedToken);
-            fetchData(storedToken);
             const decoded = jwtDecode(storedToken);
             setDecodedToken(decoded);
+            fetchData(storedToken);
         } else {
-            loadPosts(1);
+            loadPosts(currentPage);
         }
-    }, [fetchData, loadPosts]);
+    }, [fetchData, loadPosts, currentPage]);
 
     const handleCreatePost = async () => {
         if (!token) {
@@ -134,6 +166,7 @@ const fetchData = useCallback(async (enteredToken) => {
                 setShowCreatePostForm(false);
                 setNewPostContent('');
                 setCreatePostButtonVisibility(true);
+                setCurrentPage(1);
                 loadPosts(1);
             } else {
                 console.error('Failed to create post:', response.statusText);
@@ -190,12 +223,12 @@ const fetchData = useCallback(async (enteredToken) => {
                     </div>
                     {showCreatePostForm && (
                         <div className="create-post-form">
-              <textarea
-                  value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                  placeholder="Enter your post content here..."
-                  className="create-post-textarea"
-              />
+                            <textarea
+                                value={newPostContent}
+                                onChange={(e) => setNewPostContent(e.target.value)}
+                                placeholder="Enter your post content here..."
+                                className="create-post-textarea"
+                            />
                             <Button onClick={handleCreatePost} className="post-button">
                                 Post
                             </Button>
@@ -211,7 +244,7 @@ const fetchData = useCallback(async (enteredToken) => {
                         </div>
                     )}
                     {postsError && <div className="error-message">{postsError}</div>}
-                    <Posts posts={posts} pagination={pagination} onPageChange={handlePageChange}/>
+                    <Posts posts={posts} pagination={pagination} onPageChange={customPageChangeHandler}/>
                 </div>
             </div>
         </div>

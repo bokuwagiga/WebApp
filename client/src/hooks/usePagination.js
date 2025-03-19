@@ -13,27 +13,37 @@ const usePagination = (fetchFunction, initialPage = 1, perPage = 10) => {
     });
     const [error, setError] = useState(null);
 
-    const fetchData = useCallback(async (page = pagination.page) => {
+    const fetchData = useCallback(async (page = initialPage) => {
         setError(null);
 
         try {
-            const result = await fetchFunction(page, pagination.per_page);
+            console.log(`Fetching data for page ${page} with perPage ${perPage}`);
+            const result = await fetchFunction(page, perPage);
 
             if (result && result.posts) {
                 setData(result.posts);
-                setPagination(result.pagination);
+                if (result.pagination) {
+                    setPagination({
+                        ...result.pagination,
+                        page: page
+                    });
+                }
             } else {
                 setData(result || []);
             }
+            return result;
         } catch (err) {
             console.error('Error fetching paginated data:', err);
             setError(err.message || 'Failed to load data');
+            return null;
         }
-    }, [fetchFunction, pagination.page, pagination.per_page]);
 
-    const handlePageChange = (newPage) => {
+    }, [fetchFunction, perPage, initialPage]);
+
+    const handlePageChange = useCallback((newPage) => {
+        console.log(`Changing page to ${newPage}`);
         fetchData(newPage);
-    };
+    }, [fetchData]);
 
     return {
         data,
